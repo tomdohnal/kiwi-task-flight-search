@@ -14,6 +14,8 @@ export default class MyDocument extends Document {
             rel="stylesheet"
             href="//cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.2.12/semantic.min.css"
           />
+          <link rel="stylesheet" href="https://unpkg.com/react-day-picker/lib/style.css" />
+          <meta name="viewport" content="width=device-width,initial-scale=1" />
         </Head>
         <body>
           <Main />

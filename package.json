@@ -12,10 +12,12 @@
     "graphql-anywhere": "4.0.2",
     "graphql-tag": "2.5.0",
     "isomorphic-unfetch": "2.0.0",
+    "lodash": "^4.17.5",
     "next": "^5.0.0",
     "prop-types": "15.6.0",
     "react": "^16.2.0",
     "react-apollo": "2.0.1",
+    "react-day-picker": "^7.0.7",
     "react-dom": "^16.2.0",
     "semantic-ui-css": "^2.2.14",
     "semantic-ui-react": "^0.78.2"
