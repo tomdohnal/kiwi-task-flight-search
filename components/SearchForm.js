@@ -1,24 +1,31 @@
 import React, { Component } from 'react';
 import _ from 'lodash';
-import { Form, Button, Label, Input } from 'semantic-ui-react';
+import { Form, Button, Label, Dropdown } from 'semantic-ui-react';
+import { formatDate, parseDate } from 'react-day-picker/moment';
+import DayPickerInput from 'react-day-picker/DayPickerInput';
 import gql from 'graphql-tag';
 import { withApollo } from 'react-apollo';
-import DayPicker from 'react-day-picker';
 
 import { isInputNaturalNumber } from '../lib/helpers';
 
 class SearchForm extends Component {
+  defaultNoResultsMessage = 'Start typing...';
+
   state = {
     locations: [],
-    from: '',
-    fromSuggestions: [],
+    fromSearchQuery: '',
+    fromOptions: [],
+    fromSelectedOptions: [],
     fromError: '',
-    to: '',
-    toSuggestions: [],
+    fromNoResultsMessage: this.defaultNoResultsMessage,
+    toSearchQuery: '',
+    toOptions: [],
+    toSelectedOptions: [],
     toError: '',
-    date: '',
-    showDayPicker: false,
+    toNoResultsMessage: this.defaultNoResultsMessage,
+    selectedDate: '',
     dateError: '',
+    loadingResults: false,
   };
 
   search = async (e) => {
@@ -36,131 +43,239 @@ class SearchForm extends Component {
     }
   };
 
-  async getLocationSuggestions(input) {
+  async getLocationOptions(input) {
+    // we don't want to throw an error when the graphql doesn't find a matc
     try {
       const result = await this.props.client.query({
         query: allLocations,
         variables: { search: input },
       });
 
-      return result.data.allLocations.edges.map(edge => edge.node.name);
+      return result.data.allLocations.edges.map((edge) => ({
+        key: edge.node.locationId,
+        value: edge.node.name,
+        text: edge.node.name,
+      }));
     } catch (error) {
-      return [ 'no results for your query' ];
+      return false;
     }
   }
 
-  showFromSuggestions = _.debounce(async input => {
-    const suggestions = await this.getLocationSuggestions(input);
+  getMissingSelectedOptions(options, selectedOptions) {
+    return selectedOptions.filter(selectedOption => (
+      !options.includes(selectedOption)
+    ));
+  }
 
-    this.setState({ fromSuggestions: suggestions });
+  showFromOptions = _.debounce(async input => {
+    const { fromSelectedOptions } = this.state;
+    const options = await this.getLocationOptions(input);
+
+    if (options) {
+      // selected options not matching the current search query
+      const missingSelectedOptions = this.getMissingSelectedOptions(options, fromSelectedOptions);
+
+      this.setState({ fromOptions: [ ...options, ...missingSelectedOptions ] })
+    } else {
+      this.setState({ fromOptions: fromSelectedOptions, fromNoResultsMessage: 'No locations found...' });
+    }
   }, 200);
 
-  onFromInputChange = (e) => {
+  onFromDropdownChange = (e) => {
     const fromInput = e.target.value;
 
     if (this.state.fromError) {
       this.setState({ fromError: '' });
     }
 
-    this.setState({ from: fromInput });
+    this.setState({ fromSearchQuery: fromInput });
 
-    this.showFromSuggestions(fromInput);
+    this.showFromOptions(fromInput);
   };
 
-  setFrom = (from) => () => {
-    this.setState({ from, fromSuggestions: [] });
+  onFromDropdownSelect = (event, data) => {
+    const selectedOptions = this.state.fromOptions.filter(option => {
+      return data.value.includes(option.value);
+    });
+
+    this.setState({
+      fromSearchQuery: '',
+      fromSelectedOptions: selectedOptions,
+    });
   };
 
-  showToSuggestions = _.debounce(async input => {
-    const suggestions = await this.getLocationSuggestions(input);
+  onFromDropdownBlur = () => {
+    const { fromSearchQuery, fromSelectedOptions } = this.state;
 
-    this.setState({ toSuggestions: suggestions });
+    !fromSearchQuery && this.setState({
+      fromOptions: fromSelectedOptions, fromNoResultsMessage: this.defaultNoResultsMessage,
+    });
+  };
+
+  showToOptions = _.debounce(async input => {
+    const { toSelectedOptions } = this.state;
+    const options = await this.getLocationOptions(input);
+
+    if (options) {
+      // selected options not matching the current search query
+      const missingSelectedOptions = this.getMissingSelectedOptions(options, toSelectedOptions);
+
+      this.setState({ toOptions: [...options, ...missingSelectedOptions ] });
+    } else {
+      this.setState({ toOptions: toSelectedOptions, toNoResultsMessage: 'No locations found...' });
+    }
   }, 200);
 
-  onToInputChange = (e) => {
+  onToDropdownChange = (e) => {
     const toInput = e.target.value;
 
     if (this.state.toError) {
       this.setState({ toError: '' });
     }
 
-    this.setState({ to: toInput });
+    this.setState({ toSearchQuery: toInput });
 
-    this.showToSuggestions(toInput);
+    this.showToOptions(toInput);
   };
 
-  setTo = (to) => () => {
-    this.setState({ to, toSuggestions: [] });
-  };
+  onToDropdownSelect = (event, data) => {
+    const selectedOptions = this.state.toOptions.filter(option => {
+      return data.value.includes(option.value);
+    });
 
-  showDayPicker = () => {
-    if (this.state.dateError) {
-      this.setState({ dateError: '' });
-    }
-
-    this.setState({ showDayPicker: true });
-  };
-
-  onDayClick = (day, { selected }) => {
     this.setState({
-      date: selected ? '' : day,
-      showDayPicker: false,
+      toSearchQuery: '',
+      toSelectedOptions: selectedOptions,
+    });
+  };
+
+  onToDropdownBlur = () => {
+    const { toSearchQuery, toSelectedOptions } = this.state;
+
+    !toSearchQuery && this.setState({
+      toOptions: toSelectedOptions, toNoResultsMessage: this.defaultNoResultsMessage,
+    });
+  };
+
+  // we want to delegate searching for locations on the API
+  onDropdownSearch(options) {
+    return options;
+  }
+
+  onDaySelect = (day, { selected }) => {
+    day = new Date(day);
+
+    this.setState({
+      dateError: '',
+      selectedDate: selected ?
+        ''
+        :
+        `${day.getFullYear()}-${('0' + (day.getMonth() + 1)).slice(-2)}-${('0' + day.getDate()).slice(-2)}`,
     });
   };
 
   onSearchButtonClick = (e) => {
     e.preventDefault();
 
-    const { from, to, date } = this.state;
+    const { fromSelectedOptions, toSelectedOptions, selectedDate } = this.state;
 
-    if (!from) {
+    let isFormValid = true;
+
+    if (!fromSelectedOptions.length) {
+      isFormValid = false;
       this.setState({ fromError: 'Enter where you want to fly from' });
     }
 
-    if (!to) {
+    if (!toSelectedOptions.length) {
+      isFormValid = false;
       this.setState({ toError: 'Enter where you want to fly '});
     }
 
-    if (!date) {
+    if (!selectedDate) {
+      isFormValid = false;
       this.setState({ dateError: 'Enter when you want to fly' });
+    }
+
+    if (isFormValid) {
+      this.setState({ loadingResults: true });
+
+      this.props.searchFlights(fromSelectedOptions, toSelectedOptions, selectedDate);
     }
   };
 
   render() {
     const {
-      from, fromSuggestions, fromError,
-      to, toSuggestions, toError,
-      date, showDayPicker, dateError,
+      fromSearchQuery, fromOptions, fromError, fromNoResultsMessage,
+      toSearchQuery, toOptions, toError, toNoResultsMessage,
+      dateError,
+      loadingResults,
     } = this.state;
 
     return (
       <Form>
         <Form.Field error={!!fromError}>
-          <Input placeholder="From" onChange={this.onFromInputChange} value={from} />
-          {!!fromSuggestions.length && fromSuggestions.map((suggestion, index) => (
-            <li key={index} onClick={this.setFrom(suggestion)}>{suggestion}</li>
-          ))}
+          <label>From:</label>
+          <Dropdown
+            placeholder="Where you wanna fly from?"
+            onSearchChange={this.onFromDropdownChange}
+            onChange={this.onFromDropdownSelect}
+            searchQuery={fromSearchQuery}
+            options={fromOptions || []}
+            onBlur={this.onFromDropdownBlur}
+            fluid
+            multiple
+            search={this.onDropdownSearch}
+            selection
+            deburr
+            noResultsMessage={fromNoResultsMessage}
+            onKeyPress={() => false}
+            icon={false}
+          />
           {fromError && <Label basic color='red' pointing>{fromError}</Label>}
         </Form.Field>
         <Form.Field error={!!toError}>
-          <input placeholder="To" onChange={this.onToInputChange} value={to} />
-          {!!toSuggestions.length && toSuggestions.map((suggestion, index) => (
-            <li key={index} onClick={this.setTo(suggestion)}>{suggestion}</li>
-          ))}
+          <label>To:</label>
+          <Dropdown
+            placeholder="Where you wanna fly?"
+            onSearchChange={this.onToDropdownChange}
+            onChange={this.onToDropdownSelect}
+            searchQuery={toSearchQuery}
+            options={toOptions || []}
+            onBlur={this.onToDropdownBlur}
+            fluid
+            multiple
+            search={this.onDropdownSearch}
+            selection
+            deburr
+            noResultsMessage={toNoResultsMessage}
+            icon={false}
+          />
           {toError && <Label basic color='red' pointing>{toError}</Label>}
         </Form.Field>
         <Form.Field error={!!dateError}>
-          <input placeholder="Date" value={date} onFocus={this.showDayPicker} />
-          {showDayPicker &&
-            <DayPicker
-              selectedDays={void date}
-              onDayClick={this.onDayClick}
-            />
-          }
+          <label>Date</label>
+          <DayPickerInput
+            onDayChange={this.onDaySelect}
+            placeholder="When you wanna fly?"
+            formatDate={formatDate}
+            parseDate={parseDate}
+            // inline styling is not supported, so we have to pass the classnames and use tailwindcss
+            classNames={{
+              container: 'DayPickerInput w-full',
+              overlayWrapper: 'DayPickerInput-OverlayWrapper',
+              overlay: 'DayPickerInput-Overlay',
+            }}
+          />
           {dateError && <Label basic color='red' pointing>{dateError}</Label>}
         </Form.Field>
         <div style={{ textAlign: 'center' }}>
-          <Button onClick={this.onSearchButtonClick} size="massive">Search</Button>
+          <Button
+            onClick={this.onSearchButtonClick}
+            loading={loadingResults}
+            size="massive"
+          >
+            Search
+          </Button>
         </div>
       </Form>
     );
@@ -172,7 +287,8 @@ export const allLocations = gql`
     allLocations(search: $search, first: 10) {
       edges {
         node {
-          name
+          name,
+          locationId
         }
       }
     }
