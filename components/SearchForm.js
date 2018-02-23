@@ -28,21 +28,6 @@ class SearchForm extends Component {
     loadingResults: false,
   };
 
-  search = async (e) => {
-    e.preventDefault();
-
-    const { searchTerm } = this.state;
-
-    if (searchTerm && isInputNaturalNumber(searchTerm)) {
-      const result = await this.props.client.query({
-        query: firstLocations,
-        variables: { first: searchTerm },
-      });
-
-      console.log(result);
-    }
-  };
-
   async getLocationOptions(input) {
     // we don't want to throw an error when the graphql doesn't find a matc
     try {
@@ -157,7 +142,6 @@ class SearchForm extends Component {
     });
   };
 
-  // we want to delegate searching for locations on the API
   onDropdownSearch(options) {
     return options;
   }
@@ -174,7 +158,7 @@ class SearchForm extends Component {
     });
   };
 
-  onSearchButtonClick = (e) => {
+  onSearchButtonClick = async (e) => {
     e.preventDefault();
 
     const { fromSelectedOptions, toSelectedOptions, selectedDate } = this.state;
@@ -196,10 +180,12 @@ class SearchForm extends Component {
       this.setState({ dateError: 'Enter when you want to fly' });
     }
 
-    if (isFormValid) {
+    if (true || isFormValid) {
       this.setState({ loadingResults: true });
 
-      this.props.searchFlights(fromSelectedOptions, toSelectedOptions, selectedDate);
+      await this.props.searchFlights(fromSelectedOptions, toSelectedOptions, selectedDate);
+
+      this.setState({ loadingResults: false });
     }
   };
 
@@ -224,11 +210,10 @@ class SearchForm extends Component {
             onBlur={this.onFromDropdownBlur}
             fluid
             multiple
-            search={this.onDropdownSearch}
+            search={this.onDropdownSearch} // we want to delegate searching for locations on the API
             selection
             deburr
             noResultsMessage={fromNoResultsMessage}
-            onKeyPress={() => false}
             icon={false}
           />
           {fromError && <Label basic color='red' pointing>{fromError}</Label>}
@@ -244,7 +229,7 @@ class SearchForm extends Component {
             onBlur={this.onToDropdownBlur}
             fluid
             multiple
-            search={this.onDropdownSearch}
+            search={this.onDropdownSearch} // we want to delegate searching for locations on the API
             selection
             deburr
             noResultsMessage={toNoResultsMessage}
