@@ -6,18 +6,27 @@ import DayPickerInput from 'react-day-picker/DayPickerInput';
 import gql from 'graphql-tag';
 import { withApollo } from 'react-apollo';
 
+const removeDuplicateLocations = (allLocationOptions) => {
+  return allLocationOptions.reduce((locations, currentLocation) => {
+    if (!locations.map(location => location.value).includes(currentLocation.value)) {
+      return [ ...locations, currentLocation ];
+    }
+
+    return locations;
+  }, []);
+};
+
 class SearchForm extends Component {
   defaultNoResultsMessage = 'Start typing...';
 
   state = {
     locations: [],
     fromSearchQuery: '',
-    fromOptions: this.props.from,
+    fromOptions: removeDuplicateLocations(this.props.fromSelectedOptions),
     fromError: '',
     fromNoResultsMessage: this.defaultNoResultsMessage,
     toSearchQuery: '',
-    toOptions: this.props.to,
-    toSelectedOptions: this.props.to,
+    toOptions: removeDuplicateLocations(this.props.toSelectedOptions),
     toError: '',
     toNoResultsMessage: this.defaultNoResultsMessage,
     selectedDate: this.props.selectedDate,
@@ -34,11 +43,12 @@ class SearchForm extends Component {
         variables: { search: input },
       });
 
-      return result.data.allLocations.edges.map((edge) => ({
+      return removeDuplicateLocations(result.data.allLocations.edges.map((edge) => ({
         key: edge.node.locationId,
         value: edge.node.name,
         text: edge.node.name,
-      }));
+      })));
+
     } catch (error) {
       return false;
     }
@@ -76,14 +86,18 @@ class SearchForm extends Component {
     this.showFromOptions(fromInput);
   };
 
-  onFromDropdownSelect = (event, data) => {
-    const newSelectedOptions = this.state.fromOptions.filter(option => {
-      return data.value.includes(option.value);
-    });
+  onFromDropdownSelect = (event, { value }) => {
+    const oldSelectedOptions = this.props.fromSelectedOptions;
+    const allFromOptions = this.state.fromOptions;
+    const newSelectedOptions = value;
+
+    const newlySelectedOption = allFromOptions.find(option => (
+      newSelectedOptions.includes(option.value) && !oldSelectedOptions.map(option => option.value).includes(option.value)
+    ));
 
     this.setState({ fromSearchQuery: '' });
 
-    this.props.onSelectedFromOptionsChange(newSelectedOptions);
+    this.props.onSelectedFromOptionsChange([ ...oldSelectedOptions, newlySelectedOption ]);
   };
 
   onFromDropdownBlur = () => {
@@ -121,14 +135,18 @@ class SearchForm extends Component {
     this.showToOptions(toInput);
   };
 
-  onToDropdownSelect = (event, data) => {
-    const newSelectedOptions = this.state.toOptions.filter(option => {
-      return data.value.includes(option.value);
-    });
+  onToDropdownSelect = (event, { value }) => {
+    const oldSelectedOptions = this.props.toSelectedOptions;
+    const allToOptions = this.state.toOptions;
+    const newSelectedOptions = value;
+
+    const newlySelectedOption = allToOptions.find(option => (
+      newSelectedOptions.includes(option.value) && !oldSelectedOptions.map(option => option.value).includes(option.value)
+    ));
 
     this.setState({ toSearchQuery: '' });
 
-    this.props.onSelectedToOptionsChange(newSelectedOptions);
+    this.props.onSelectedToOptionsChange([ ...oldSelectedOptions, newlySelectedOption ]);
   };
 
   onToDropdownBlur = () => {
@@ -193,6 +211,8 @@ class SearchForm extends Component {
       loadingResults,
     } = this.state;
 
+    const { fromSelectedOptions, toSelectedOptions } = this.props;
+
     return (
       <Form>
         <Form.Field error={!!fromError}>
@@ -210,6 +230,7 @@ class SearchForm extends Component {
             selection
             deburr
             noResultsMessage={fromNoResultsMessage}
+            value={removeDuplicateLocations(fromSelectedOptions).map(option => option.text)}
             icon={false}
           />
           {fromError && <Label basic color='red' pointing>{fromError}</Label>}
@@ -229,6 +250,7 @@ class SearchForm extends Component {
             selection
             deburr
             noResultsMessage={toNoResultsMessage}
+            value={removeDuplicateLocations(toSelectedOptions).map(option => option.text)}
             icon={false}
           />
           {toError && <Label basic color='red' pointing>{toError}</Label>}

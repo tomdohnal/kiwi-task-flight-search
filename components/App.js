@@ -9,6 +9,11 @@ import Pagination from './Pagination';
 import { withApollo } from 'react-apollo';
 import gql from 'graphql-tag';
 
+const SEARCH_TYPES = {
+  NEXT_PAGE: 'NEXT_PAGE',
+  PREV_PAGE: 'PREV_PAGE',
+};
+
 class App extends Component {
   state = {
     flights: [],
@@ -19,9 +24,26 @@ class App extends Component {
       startCursor: '',
       endCursor: '',
     },
-    from: [],
-    to: [],
-    date: '',
+    from: [
+      {
+        "key": "paris_fr",
+        "value": "Paris",
+        "text": "Paris"
+      }
+    ],
+    to: [
+      {
+        "key": "london_gb",
+        "value": "London",
+        "text": "London"
+      },
+      {
+        "key": "london_gb",
+        "value": "London",
+        "text": "London"
+      }
+    ],
+    date: '2018-02-28',
   };
 
   formatFlightDate(date) {
@@ -30,70 +52,89 @@ class App extends Component {
     return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()} ${date.getHours()}:${('0' + date.getMinutes()).slice(-2)}`;
   }
 
-  searchFlights = async () => {
-    const { from, to, date } = this.state;
-
+  mapSearchResultToState = (result) => {
     this.setState({
-      flight: [],
+      flights: result.data.allFlights.edges.map(({ node }) => ({
+        arrival: {
+          airport: node.arrival.airport.name,
+          city: node.arrival.airport.city.name,
+          time: this.formatFlightDate(node.arrival.time),
+          localTime: this.formatFlightDate(node.arrival.localTime),
+        },
+        departure: {
+          airport: node.departure.airport.name,
+          city: node.departure.airport.city.name,
+          time: this.formatFlightDate(node.departure.time),
+          localTime: this.formatFlightDate(node.departure.localTime),
+        },
+        duration: node.duration,
+        price: {
+          amount: node.price.amount,
+          currency: node.price.currency,
+        },
+        id: node.id,
+      })),
+      pageInfo: {
+        hasNextPage: result.data.allFlights.pageInfo.hasNextPage,
+        hasPreviousPage: result.data.allFlights.pageInfo.hasPreviousPage,
+        startCursor: result.data.allFlights.pageInfo.startCursor,
+        endCursor: result.data.allFlights.pageInfo.endCursor,
+      }
+    });
+  };
+
+  getSearchQueryVariablesBySearchType = (searchType) => {
+    const { from, to, date, pageInfo: { startCursor, endCursor }  } = this.state;
+
+    const commonVariabless = {
+        search: {
+          from: from.map(location => ({location: location.value})),
+          to: to.map(location => ({location: location.value})),
+          date: { exact: date },
+        },
+    };
+
+    const commonVariables =  { search: {
+      from: [{ location: 'London' }],
+          to: [{ location: 'Paris' }],
+          date: {
+          exact: '2018-02-28',
+        },
+      },
+    };
+
+    switch (searchType) {
+      case SEARCH_TYPES.NEXT_PAGE:
+        return { ...commonVariables, after: endCursor };
+      case SEARCH_TYPES.PREV_PAGE:
+        return { ...commonVariables, before: startCursor };
+      default:
+        return commonVariables;
+    }
+  };
+
+  searchFlights = async (searchType) => {
+    this.setState({
+      flights: [],
       searchFailed: false,
     });
 
+    const queryVariables = this.getSearchQueryVariablesBySearchType(searchType);
+
     try {
-     /*const result = await this.props.client.query({
+     const result = await this.props.client.query({
         query: allFlights,
-        variables: { search: {
-            from: [{ location: 'London' }],
-            to: [{ location: 'Paris' }],
-            date: {
-              exact: '2018-02-28',
-            },
-          },
-        },
-      });*/
+        variables: queryVariables,
+     });
 
-      const result = await this.props.client.query({
-        query: allFlights,
-        variables: { search: {
-            from: from.map(location => ({ location: location.value })),
-            to: to.map(location => ({ location: location.value })),
-            date: {
-              exact: date,
-            },
-          },
-        },
-      });
-
-      this.setState({
-        flights: result.data.allFlights.edges.map(({ node }) => ({
-          arrival: {
-            airport: node.arrival.airport.name,
-            city: node.arrival.airport.city.name,
-            time: this.formatFlightDate(node.arrival.time),
-            localTime: this.formatFlightDate(node.arrival.localTime),
-          },
-          departure: {
-            airport: node.departure.airport.name,
-            city: node.departure.airport.city.name,
-            time: this.formatFlightDate(node.departure.time),
-            localTime: this.formatFlightDate(node.departure.localTime),
-          },
-          duration: node.duration,
-          price: {
-            amount: node.price.amount,
-            currency: node.price.currency,
-          },
-          id: node.id,
-        })),
-        pageInfo: {
-          hasNextPage: result.data.allFlights.pageInfo.hasNextPage,
-          hasPreviousPage: result.data.allFlights.pageInfo.hasPreviousPage,
-          startCursor: result.data.allFlights.pageInfo.startCursor,
-          endCursor: result.data.allFlights.pageInfo.endCursor,
-        }
-      });
+      this.mapSearchResultToState(result);
     } catch (error) {
       this.setState({ searchFailed: true });
     }
+  };
+
+  searchNextFlights = async () => {
+    await this.searchFlights(SEARCH_TYPES.NEXT_PAGE);
   };
 
   setFrom = (from) => {
@@ -125,15 +166,15 @@ class App extends Component {
         />
         {!!flights.length && <FlightList flights={flights} />}
         {searchFailed && <FlightSearchError />}
-        {(pageInfo.hasPreviousPage || pageInfo.hasNextPage) && <Pagination pageInfo={pageInfo} />}
+        {(pageInfo.hasPreviousPage || pageInfo.hasNextPage) && <Pagination pageInfo={pageInfo} goToNextPage={this.searchNextFlights}/>}
       </Container>
     );
   }
 }
 
 export const allFlights = gql`
-  query allFlights($search: FlightsSearchInput!, $after: String) {
-    allFlights(search: $search, options: { currency: EUR }, first: 5, after: $after) {
+  query allFlights($search: FlightsSearchInput!, $after: String, $before: String) {
+    allFlights(search: $search, after: $after, before: $before, options: { currency: EUR }, first: 5) {
       pageInfo {
         hasNextPage,
         hasPreviousPage,
