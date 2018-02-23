@@ -6,30 +6,28 @@ import DayPickerInput from 'react-day-picker/DayPickerInput';
 import gql from 'graphql-tag';
 import { withApollo } from 'react-apollo';
 
-import { isInputNaturalNumber } from '../lib/helpers';
-
 class SearchForm extends Component {
   defaultNoResultsMessage = 'Start typing...';
 
   state = {
     locations: [],
     fromSearchQuery: '',
-    fromOptions: [],
-    fromSelectedOptions: [],
+    fromOptions: this.props.from,
     fromError: '',
     fromNoResultsMessage: this.defaultNoResultsMessage,
     toSearchQuery: '',
-    toOptions: [],
-    toSelectedOptions: [],
+    toOptions: this.props.to,
+    toSelectedOptions: this.props.to,
     toError: '',
     toNoResultsMessage: this.defaultNoResultsMessage,
-    selectedDate: '',
+    selectedDate: this.props.selectedDate,
     dateError: '',
     loadingResults: false,
   };
 
+
   async getLocationOptions(input) {
-    // we don't want to throw an error when the graphql doesn't find a matc
+    // we don't want to throw an error when the graphql doesn't find a match
     try {
       const result = await this.props.client.query({
         query: allLocations,
@@ -53,7 +51,7 @@ class SearchForm extends Component {
   }
 
   showFromOptions = _.debounce(async input => {
-    const { fromSelectedOptions } = this.state;
+    const { fromSelectedOptions } = this.props;
     const options = await this.getLocationOptions(input);
 
     if (options) {
@@ -79,18 +77,18 @@ class SearchForm extends Component {
   };
 
   onFromDropdownSelect = (event, data) => {
-    const selectedOptions = this.state.fromOptions.filter(option => {
+    const newSelectedOptions = this.state.fromOptions.filter(option => {
       return data.value.includes(option.value);
     });
 
-    this.setState({
-      fromSearchQuery: '',
-      fromSelectedOptions: selectedOptions,
-    });
+    this.setState({ fromSearchQuery: '' });
+
+    this.props.onSelectedFromOptionsChange(newSelectedOptions);
   };
 
   onFromDropdownBlur = () => {
-    const { fromSearchQuery, fromSelectedOptions } = this.state;
+    const { fromSearchQuery } = this.state;
+    const { fromSelectedOptions } = this.props;
 
     !fromSearchQuery && this.setState({
       fromOptions: fromSelectedOptions, fromNoResultsMessage: this.defaultNoResultsMessage,
@@ -98,7 +96,7 @@ class SearchForm extends Component {
   };
 
   showToOptions = _.debounce(async input => {
-    const { toSelectedOptions } = this.state;
+    const { toSelectedOptions } = this.props;
     const options = await this.getLocationOptions(input);
 
     if (options) {
@@ -124,18 +122,18 @@ class SearchForm extends Component {
   };
 
   onToDropdownSelect = (event, data) => {
-    const selectedOptions = this.state.toOptions.filter(option => {
+    const newSelectedOptions = this.state.toOptions.filter(option => {
       return data.value.includes(option.value);
     });
 
-    this.setState({
-      toSearchQuery: '',
-      toSelectedOptions: selectedOptions,
-    });
+    this.setState({ toSearchQuery: '' });
+
+    this.props.onSelectedToOptionsChange(newSelectedOptions);
   };
 
   onToDropdownBlur = () => {
-    const { toSearchQuery, toSelectedOptions } = this.state;
+    const { toSearchQuery } = this.state;
+    const { toSelectedOptions } = this.props;
 
     !toSearchQuery && this.setState({
       toOptions: toSelectedOptions, toNoResultsMessage: this.defaultNoResultsMessage,
@@ -146,22 +144,20 @@ class SearchForm extends Component {
     return options;
   }
 
-  onDaySelect = (day, { selected }) => {
+  onDaySelect = (day) => {
     day = new Date(day);
 
     this.setState({
       dateError: '',
-      selectedDate: selected ?
-        ''
-        :
-        `${day.getFullYear()}-${('0' + (day.getMonth() + 1)).slice(-2)}-${('0' + day.getDate()).slice(-2)}`,
     });
+
+    this.props.onSelectedDateChange(`${day.getFullYear()}-${('0' + (day.getMonth() + 1)).slice(-2)}-${('0' + day.getDate()).slice(-2)}`);
   };
 
   onSearchButtonClick = async (e) => {
     e.preventDefault();
 
-    const { fromSelectedOptions, toSelectedOptions, selectedDate } = this.state;
+    const { fromSelectedOptions, toSelectedOptions, selectedDate } = this.props;
 
     let isFormValid = true;
 
@@ -183,7 +179,7 @@ class SearchForm extends Component {
     if (true || isFormValid) {
       this.setState({ loadingResults: true });
 
-      await this.props.searchFlights(fromSelectedOptions, toSelectedOptions, selectedDate);
+      await this.props.searchFlights();
 
       this.setState({ loadingResults: false });
     }
