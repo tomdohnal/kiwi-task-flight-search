@@ -1,10 +1,11 @@
 import { Button } from 'semantic-ui-react';
 
 const Pagination = ({
-  pageInfo: { hasNextPage, hasPreviousPage, startCursor, endCursor },
-  goToNextPage,
+  pageInfo: { hasNextPage, hasPreviousPage },
+  goToNextPage, goToPreviousPage,
 }) => (
   <div>
+    {hasPreviousPage && <Button onClick={goToPreviousPage}>Previous page</Button>}
     {hasNextPage && <Button onClick={goToNextPage}>Next page</Button>}
   </div>
 );

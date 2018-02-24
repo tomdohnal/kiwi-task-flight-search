@@ -9,21 +9,20 @@ import Pagination from './Pagination';
 import { withApollo } from 'react-apollo';
 import gql from 'graphql-tag';
 
-const SEARCH_TYPES = {
-  NEXT_PAGE: 'NEXT_PAGE',
-  PREV_PAGE: 'PREV_PAGE',
-};
-
 class App extends Component {
   state = {
     flights: [],
+    prevFlights: [], // flights on the previous page
+    nextFlights: [], // flights on the next page
     searchFailed: false,
+    loadingResults: false,
     pageInfo: {
       hasNextPage: false,
       hasPreviousPage: false,
       startCursor: '',
       endCursor: '',
     },
+    currentPage: 1,
     from: [
       {
         "key": "paris_fr",
@@ -46,6 +45,13 @@ class App extends Component {
     date: '2018-02-28',
   };
 
+  SEARCH_TYPES = {
+    NEXT_PAGE: 'NEXT_PAGE',
+    PREV_PAGE: 'PREV_PAGE',
+  };
+
+  FLIGHTS_PER_PAGE = 5;
+
   formatFlightDate(date) {
     date = new Date(date);
 
@@ -53,7 +59,7 @@ class App extends Component {
   }
 
   mapSearchResultToState = (result) => {
-    this.setState({
+    this.setState((prevState) => ({
       flights: result.data.allFlights.edges.map(({ node }) => ({
         arrival: {
           airport: node.arrival.airport.name,
@@ -75,12 +81,13 @@ class App extends Component {
         id: node.id,
       })),
       pageInfo: {
+        ...prevState.pageInfo,
         hasNextPage: result.data.allFlights.pageInfo.hasNextPage,
         hasPreviousPage: result.data.allFlights.pageInfo.hasPreviousPage,
         startCursor: result.data.allFlights.pageInfo.startCursor,
         endCursor: result.data.allFlights.pageInfo.endCursor,
       }
-    });
+    }), () => this.setState({ loadingResults: false }));
   };
 
   getSearchQueryVariablesBySearchType = (searchType) => {
@@ -104,18 +111,19 @@ class App extends Component {
     };
 
     switch (searchType) {
-      case SEARCH_TYPES.NEXT_PAGE:
-        return { ...commonVariables, after: endCursor };
-      case SEARCH_TYPES.PREV_PAGE:
-        return { ...commonVariables, before: startCursor };
+      case this.SEARCH_TYPES.NEXT_PAGE:
+        return { ...commonVariables, after: endCursor, first: this.FLIGHTS_PER_PAGE };
+      case this.SEARCH_TYPES.PREV_PAGE:
+        return { ...commonVariables, before: startCursor, last: this.FLIGHTS_PER_PAGE };
       default:
-        return commonVariables;
+        return { ...commonVariables, first: this.FLIGHTS_PER_PAGE };
     }
   };
 
   searchFlights = async (searchType) => {
     this.setState({
       flights: [],
+      loadingResults: true,
       searchFailed: false,
     });
 
@@ -129,12 +137,33 @@ class App extends Component {
 
       this.mapSearchResultToState(result);
     } catch (error) {
-      this.setState({ searchFailed: true });
+      this.setState({ searchFailed: true, loadingResults: false });
     }
   };
 
   searchNextFlights = async () => {
-    await this.searchFlights(SEARCH_TYPES.NEXT_PAGE);
+    await this.searchFlights(this.SEARCH_TYPES.NEXT_PAGE);
+
+    this.setState((prevState) => ({
+      pageInfo: {
+        ...prevState.pageInfo,
+        // if we go to the next page, we are sure that there is at least one previous page
+        hasPreviousPage: true,
+      },
+      currentPage: prevState.currentPage + 1,
+    }));
+  };
+
+  searchPreviousFlights = async () => {
+    await this.searchFlights(this.SEARCH_TYPES.PREV_PAGE);
+
+    this.setState((prevState) => ({ pageInfo: {
+        ...prevState.pageInfo,
+        // if we go to the previous page, we are sure that there is at least one next page
+        hasNextPage: true,
+      },
+      currentPage: prevState.currentPage - 1,
+    }));
   };
 
   setFrom = (from) => {
@@ -150,7 +179,7 @@ class App extends Component {
   };
 
   render() {
-    const { flights, searchFailed, pageInfo, from, to, date }  = this.state;
+    const { flights, searchFailed, loadingResults, pageInfo, from, to, date }  = this.state;
 
     return (
       <Container className="my-4">
@@ -164,17 +193,24 @@ class App extends Component {
           selectedDate={date}
           onSelectedDateChange={this.setDate}
         />
-        {!!flights.length && <FlightList flights={flights} />}
+        {loadingResults && <div>Loading...</div>}
+        {!!flights.length && !loadingResults && <FlightList flights={flights} />}
         {searchFailed && <FlightSearchError />}
-        {(pageInfo.hasPreviousPage || pageInfo.hasNextPage) && <Pagination pageInfo={pageInfo} goToNextPage={this.searchNextFlights}/>}
+        {(pageInfo.hasPreviousPage || pageInfo.hasNextPage) && !loadingResults && (
+          <Pagination
+            pageInfo={pageInfo}
+            goToNextPage={this.searchNextFlights}
+            goToPreviousPage={this.searchPreviousFlights}
+          />
+        )}
       </Container>
     );
   }
 }
 
 export const allFlights = gql`
-  query allFlights($search: FlightsSearchInput!, $after: String, $before: String) {
-    allFlights(search: $search, after: $after, before: $before, options: { currency: EUR }, first: 5) {
+  query allFlights($search: FlightsSearchInput!, $after: String, $before: String, $first: Int, $last: Int) {
+    allFlights(search: $search, after: $after, before: $before, options: { currency: EUR }, first: $first, last: $last) {
       pageInfo {
         hasNextPage,
         hasPreviousPage,
