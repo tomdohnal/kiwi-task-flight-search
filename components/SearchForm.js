@@ -5,6 +5,7 @@ import { formatDate, parseDate } from 'react-day-picker/moment';
 import DayPickerInput from 'react-day-picker/DayPickerInput';
 import gql from 'graphql-tag';
 import { withApollo } from 'react-apollo';
+import { parseKiwiDateToStandardDate, parseToKiwiDate } from '../lib/dates';
 
 const removeDuplicateLocations = (allLocationOptions) => {
   return allLocationOptions.reduce((locations, currentLocation) => {
@@ -29,7 +30,6 @@ class SearchForm extends Component {
     toOptions: removeDuplicateLocations(this.props.toSelectedOptions),
     toError: '',
     toNoResultsMessage: this.defaultNoResultsMessage,
-    selectedDate: this.props.selectedDate,
     dateError: '',
     loadingResults: false,
   };
@@ -163,13 +163,11 @@ class SearchForm extends Component {
   }
 
   onDaySelect = (day) => {
-    day = new Date(day);
-
     this.setState({
       dateError: '',
     });
 
-    this.props.onSelectedDateChange(`${day.getFullYear()}-${('0' + (day.getMonth() + 1)).slice(-2)}-${('0' + day.getDate()).slice(-2)}`);
+    this.props.onSelectedDateChange(parseToKiwiDate(new Date(day)));
   };
 
   onSearchButtonClick = async (e) => {
@@ -211,7 +209,7 @@ class SearchForm extends Component {
       loadingResults,
     } = this.state;
 
-    const { fromSelectedOptions, toSelectedOptions } = this.props;
+    const { fromSelectedOptions, toSelectedOptions, selectedDate } = this.props;
 
     return (
       <Form>
@@ -262,6 +260,7 @@ class SearchForm extends Component {
             placeholder="When you wanna fly?"
             formatDate={formatDate}
             parseDate={parseDate}
+            value={parseKiwiDateToStandardDate(selectedDate)}
             // inline styling is not supported, so we have to pass the classnames and use tailwindcss
             classNames={{
               container: 'DayPickerInput w-full',
