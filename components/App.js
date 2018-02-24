@@ -11,18 +11,18 @@ import gql from 'graphql-tag';
 
 class App extends Component {
   state = {
-    flights: [],
-    prevFlights: [], // flights on the previous page
-    nextFlights: [], // flights on the next page
+    pages: [{
+      flights: [],
+      info: {
+        hasNextPage: false,
+        hasPreviousPage: false,
+        startCursor: '',
+        endCursor: '',
+      },
+    }],
     searchFailed: false,
     loadingResults: false,
-    pageInfo: {
-      hasNextPage: false,
-      hasPreviousPage: false,
-      startCursor: '',
-      endCursor: '',
-    },
-    currentPage: 1,
+    currentPageIndex: 1,
     from: [
       {
         "key": "paris_fr",
@@ -59,39 +59,52 @@ class App extends Component {
   }
 
   mapSearchResultToState = (result) => {
+    const { pages, currentPageIndex } = this.state;
+
+    const newFlights = result.data.allFlights.edges.map(({ node }) => ({
+      arrival: {
+        airport: node.arrival.airport.name,
+        city: node.arrival.airport.city.name,
+        time: this.formatFlightDate(node.arrival.time),
+        localTime: this.formatFlightDate(node.arrival.localTime),
+      },
+      departure: {
+        airport: node.departure.airport.name,
+        city: node.departure.airport.city.name,
+        time: this.formatFlightDate(node.departure.time),
+        localTime: this.formatFlightDate(node.departure.localTime),
+      },
+      duration: node.duration,
+      price: {
+        amount: node.price.amount,
+        currency: node.price.currency,
+      },
+      id: node.id,
+    }));
+
+    const newInfo = {
+      hasNextPage: result.data.allFlights.pageInfo.hasNextPage,
+      hasPreviousPage: result.data.allFlights.pageInfo.hasPreviousPage,
+      startCursor: result.data.allFlights.pageInfo.startCursor,
+      endCursor: result.data.allFlights.pageInfo.endCursor,
+    };
+
+    const newPage = {
+      flights: newFlights,
+      info: newInfo,
+    };
+
+    const arePagesEmpty = !pages[currentPageIndex - 1].flights.length;
+
     this.setState((prevState) => ({
-      flights: result.data.allFlights.edges.map(({ node }) => ({
-        arrival: {
-          airport: node.arrival.airport.name,
-          city: node.arrival.airport.city.name,
-          time: this.formatFlightDate(node.arrival.time),
-          localTime: this.formatFlightDate(node.arrival.localTime),
-        },
-        departure: {
-          airport: node.departure.airport.name,
-          city: node.departure.airport.city.name,
-          time: this.formatFlightDate(node.departure.time),
-          localTime: this.formatFlightDate(node.departure.localTime),
-        },
-        duration: node.duration,
-        price: {
-          amount: node.price.amount,
-          currency: node.price.currency,
-        },
-        id: node.id,
-      })),
-      pageInfo: {
-        ...prevState.pageInfo,
-        hasNextPage: result.data.allFlights.pageInfo.hasNextPage,
-        hasPreviousPage: result.data.allFlights.pageInfo.hasPreviousPage,
-        startCursor: result.data.allFlights.pageInfo.startCursor,
-        endCursor: result.data.allFlights.pageInfo.endCursor,
-      }
-    }), () => this.setState({ loadingResults: false }));
+      pages: arePagesEmpty ? [ newPage ] : [ ...prevState.pages, newPage ],
+    }), this.setState({ loadingResults: false }));
   };
 
   getSearchQueryVariablesBySearchType = (searchType) => {
-    const { from, to, date, pageInfo: { startCursor, endCursor }  } = this.state;
+    const { from, to, date, pages, currentPageIndex } = this.state;
+
+    const { startCursor, endCursor } = pages[currentPageIndex - 1].info;
 
     const commonVariabless = {
         search: {
@@ -122,7 +135,6 @@ class App extends Component {
 
   searchFlights = async (searchType) => {
     this.setState({
-      flights: [],
       loadingResults: true,
       searchFailed: false,
     });
@@ -144,26 +156,75 @@ class App extends Component {
   searchNextFlights = async () => {
     await this.searchFlights(this.SEARCH_TYPES.NEXT_PAGE);
 
-    this.setState((prevState) => ({
-      pageInfo: {
-        ...prevState.pageInfo,
-        // if we go to the next page, we are sure that there is at least one previous page
-        hasPreviousPage: true,
-      },
-      currentPage: prevState.currentPage + 1,
-    }));
+    this.setState((prevState) => {
+      const updatedPages = prevState.pages.map((page, index) => {
+        if (prevState.currentPageIndex === index) {
+          return {
+            ...page,
+            info: {
+              ...page.info,
+              // if we go to the next page, we are sure that there is at least one previous page
+              hasPreviousPage: true,
+            }
+          };
+        }
+
+        return page;
+      });
+
+      return {
+        pages: updatedPages,
+        currentPageIndex: prevState.currentPageIndex + 1,
+      }
+    });
+  };
+
+  goToNextPage = async () => {
+    const { pages, currentPageIndex } = this.state;
+
+    // if the next page is not already loaded
+    if (!pages[currentPageIndex] || !pages[currentPageIndex].flights.length) {
+      await this.searchNextFlights();
+    } else {
+      this.setState({ currentPageIndex: currentPageIndex + 1 });
+    }
   };
 
   searchPreviousFlights = async () => {
     await this.searchFlights(this.SEARCH_TYPES.PREV_PAGE);
 
-    this.setState((prevState) => ({ pageInfo: {
-        ...prevState.pageInfo,
-        // if we go to the previous page, we are sure that there is at least one next page
-        hasNextPage: true,
-      },
-      currentPage: prevState.currentPage - 1,
-    }));
+    this.setState((prevState) => {
+      const updatedPages = prevState.pages.map((page, index) => {
+        if (prevState.currentPageIndex === index) {
+          return {
+            ...page,
+            info: {
+              ...page.info,
+              // if we go to the next page, we are sure that there is at least one previous page
+              hasNextPage: true,
+            }
+          };
+        }
+
+        return page;
+      });
+
+      return {
+        pages: updatedPages,
+        currentPageIndex: prevState.currentPageIndex - 1,
+      }
+    });
+  };
+
+  goToPreviousPage = async () => {
+    const { pages, currentPageIndex } = this.state;
+
+    // if the previous page is not already loaded
+    if (!pages[currentPageIndex - 2].flights.length) {
+      await this.searchPreviousFlights();
+    } else {
+      this.setState({ currentPageIndex: currentPageIndex - 1 });
+    }
   };
 
   setFrom = (from) => {
@@ -179,7 +240,10 @@ class App extends Component {
   };
 
   render() {
-    const { flights, searchFailed, loadingResults, pageInfo, from, to, date }  = this.state;
+    const { pages, currentPageIndex, searchFailed, loadingResults, from, to, date } = this.state;
+
+    const { flights } = pages[currentPageIndex - 1];
+    const pageInfo = pages[currentPageIndex - 1].info;
 
     return (
       <Container className="my-4">
@@ -194,13 +258,13 @@ class App extends Component {
           onSelectedDateChange={this.setDate}
         />
         {loadingResults && <div>Loading...</div>}
-        {!!flights.length && !loadingResults && <FlightList flights={flights} />}
+        {flights && !loadingResults && <FlightList flights={flights} />}
         {searchFailed && <FlightSearchError />}
         {(pageInfo.hasPreviousPage || pageInfo.hasNextPage) && !loadingResults && (
           <Pagination
             pageInfo={pageInfo}
-            goToNextPage={this.searchNextFlights}
-            goToPreviousPage={this.searchPreviousFlights}
+            goToNextPage={this.goToNextPage}
+            goToPreviousPage={this.goToPreviousPage}
           />
         )}
       </Container>
