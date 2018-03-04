@@ -4,6 +4,8 @@
 
 To clone the repositary, run `git clone https://github.com/tomdohnal/kiwi-task-flight-search.git` or `git clone git@github.com:tomdohnal/kiwi-task-flight-search.git`
 
+To install the dependencies, run `yarn install`
+
 To run the app, run `yarn next`
 
 ## Features
