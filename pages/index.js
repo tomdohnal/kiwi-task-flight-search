@@ -16,15 +16,12 @@ const apolloClient = initApollo();
 const SEARCH_TYPES = {
   INITIAL: 'INITIAL',	
   NEXT_PAGE: 'NEXT_PAGE',
-  PREV_PAGE: 'PREV_PAGE',
 };
 
 const FLIGHTS_PER_PAGE = 5;
 
 const getSearchQueryVariablesBySearchType = (searchType, variables) => {
   const { from, to, date, pages, currentPageIndex } = variables;
-
-  const { startCursor, endCursor } = pages[currentPageIndex - 1].info;
 
   const commonVariables = {
     search: {
@@ -36,9 +33,9 @@ const getSearchQueryVariablesBySearchType = (searchType, variables) => {
 
   switch (searchType) {
     case SEARCH_TYPES.NEXT_PAGE:
+    	const { endCursor } = pages[currentPageIndex - 1].info;
+
       return { ...commonVariables, after: endCursor, first: FLIGHTS_PER_PAGE };
-    case SEARCH_TYPES.PREV_PAGE:
-      return { ...commonVariables, before: startCursor, last: FLIGHTS_PER_PAGE };
     case SEARCH_TYPES.INITIAL:
       return { ...commonVariables, first: FLIGHTS_PER_PAGE }
     default:
@@ -89,7 +86,6 @@ class App extends Component {
   state = {
     pages: this.props.pages,
     searchFailed: this.props.searchFailed,
-    loadingResults: false,
     currentPageIndex: this.props.currentPageIndex,
     from: this.props.from,
     to: this.props.to,
@@ -107,13 +103,7 @@ class App extends Component {
 		  date: query.date,
 		  currentPageIndex: 1,
 		  pages: [{
-		    flights: [],
-		    info: {
-		      hasNextPage: false,
-		      hasPreviousPage: false,
-		      startCursor: '',
-		      endCursor: '',
-		    },
+		    loading: false,
 		  }],
 		  searchFailed: false,
   	};
@@ -137,12 +127,13 @@ class App extends Component {
   }
 
   searchFlights = async (searchType) => {
-  	const { pages, currentPageIndex } = this.state;
+  	const searchPageIndex = searchType === SEARCH_TYPES.INITIAL ? 1 : this.state.currentPageIndex + 1;
 
-    this.setState({
-      loadingResults: true,
-      searchFailed: false,
-    });
+		this.setState(({ pages, currentPageIndex }) => ({ 
+			searchFailed: false, 
+			pages: searchType === SEARCH_TYPES.INITIAL ? 
+				[{ loading: true }] : [...pages, { loading: true }],
+		}));
 
     const queryVariables = getSearchQueryVariablesBySearchType(searchType, this.state);
 
@@ -152,28 +143,29 @@ class App extends Component {
         variables: queryVariables,
       });
 
-      const newPage = mapSearchResult(result);
+      const newPage = { ...mapSearchResult(result), loading: false };
 
-	    this.setState((prevState) => ({
-	      pages: searchType === SEARCH_TYPES.INITIAL ? [ newPage ] : [ ...prevState.pages, newPage ],
-	      loadingResults: false,
+	    this.setState(({ pages }) => ({
+	      pages: searchType === SEARCH_TYPES.INITIAL ? [ newPage ] : pages.map(page => (
+	      	page.loading ? newPage : page
+	      )),
 	    }));
     } catch (error) {
-      this.setState({ searchFailed: true, loadingResults: false });
+      this.setState({ searchFailed: true });
     }
   };
 
-  searchNextFlights = async () => {
-    await this.searchFlights(SEARCH_TYPES.NEXT_PAGE);
+  prefetchNextFlights = async () => {
+		await this.searchFlights(SEARCH_TYPES.NEXT_PAGE);
 
-    this.setState((prevState) => {
-      const updatedPages = prevState.pages.map((page, index) => {
-        if (prevState.currentPageIndex === index) {
+    this.setState(({ pages }) => {
+      const updatedPages = pages.map((page, index) => {
+        if (index >= 1 && page.info && !page.info.hasPreviousPage) {
           return {
             ...page,
             info: {
               ...page.info,
-              // if we go to the next page, we are sure that there is at least one previous page
+              // if we go to the next page, we are sure that there is a previous page
               hasPreviousPage: true,
             }
           };
@@ -189,51 +181,15 @@ class App extends Component {
   };
 
   goToNextPage = async () => {
-    const { pages, currentPageIndex } = this.state;
-
-    // if the next page is not already loaded, load next flights
-    if (!pages[currentPageIndex] || !pages[currentPageIndex].flights.length) {
-      await this.searchNextFlights();
-    }
+    const { currentPageIndex } = this.state;
 
     this.setState({ currentPageIndex: currentPageIndex + 1 });
   };
 
-  searchPreviousFlights = async () => {
-    await this.searchFlights(EARCH_TYPES.PREV_PAGE);
-
-    this.setState((prevState) => {
-      const updatedPages = prevState.pages.map((page, index) => {
-        if (prevState.currentPageIndex === index) {
-          return {
-            ...page,
-            info: {
-              ...page.info,
-              // if we go to the next page, we are sure that there is at least one previous page
-              hasNextPage: true,
-            }
-          };
-        }
-
-        return page;
-      });
-
-      return {
-        pages: updatedPages,
-        currentPageIndex: prevState.currentPageIndex - 1,
-      }
-    });
-  };
-
   goToPreviousPage = async () => {
-    const { pages, currentPageIndex } = this.state;
+    const { currentPageIndex } = this.state;
 
-    // if the previous page is not already loaded
-    if (!pages[currentPageIndex - 2].flights.length) {
-      await this.searchPreviousFlights();
-    } else {
-      this.setState({ currentPageIndex: currentPageIndex - 1 });
-    }
+    this.setState({ currentPageIndex: currentPageIndex - 1 });
   };
 
   setFrom = (from) => {
@@ -248,10 +204,34 @@ class App extends Component {
     this.setState({ date });
   };
 
-  render() {
-    const { pages, currentPageIndex, searchFailed, loadingResults, from, to, date } = this.state;
+  componentDidUpdate(prevProps, prevState) {
+  	const { currentPageIndex } = this.state;
 
-    const { flights } = pages[currentPageIndex - 1];
+  	const prevPageIndex = prevState.currentPageIndex;
+
+  	if (
+  		// the user has just gone to the next page which had been already prefetched
+  		// and the page after the next page hasn't been already prefetched
+  		currentPageIndex > prevPageIndex && this.state.pages[currentPageIndex - 1].info && !this.state.pages[currentPageIndex] || 
+  		// if the user had gone to a not-yet-fully-prefetched next page and it has just loaded
+  		!prevState.pages[currentPageIndex - 1].info && this.state.pages[currentPageIndex - 1].info || 
+  		// if the initial search has just finished
+			(this.state.pages[0].info && !prevState.pages[0].info)
+		) {
+  		this.prefetchNextFlights();
+		}
+  }
+
+  componentDidMount() {
+  	// if the server renders some pages, prefetch the next page
+  	this.state.pages[this.state.currentPageIndex - 1].info && this.prefetchNextFlights();
+  }
+
+  render() {
+    const { pages, currentPageIndex, searchFailed, from, to, date } = this.state;
+
+    const { flights, loading } = pages[currentPageIndex - 1];
+
     const pageInfo = pages[currentPageIndex - 1].info;
 
     return (
@@ -266,10 +246,10 @@ class App extends Component {
           selectedDate={date}
           onSelectedDateChange={this.setDate}
         />
-        {loadingResults && <Loader active inline="centered" size="massive" style={{ marginTop: '6rem'}} />}
-        {flights && !loadingResults && <FlightList flights={flights} />}
+        {loading && <Loader active inline="centered" size="massive" style={{ marginTop: '6rem'}} />}
+        {!loading && flights  && <FlightList flights={flights} />}
         {searchFailed && <FlightSearchError />}
-        {(pageInfo.hasPreviousPage || pageInfo.hasNextPage) && !loadingResults && (
+        {pageInfo && (pageInfo.hasPreviousPage || pageInfo.hasNextPage) && (
           <Pagination
             pageInfo={pageInfo}
             goToNextPage={this.goToNextPage}
