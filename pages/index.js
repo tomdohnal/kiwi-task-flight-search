@@ -8,10 +8,7 @@ import Header from '../components/Header';
 import FlightList from '../components/FlightList';
 import FlightSearchError from '../components/FlightSearchError';
 import Pagination from '../components/Pagination';
-import initApollo from '../lib/initApollo';
-import withData from '../lib/withData';
-
-const apolloClient = initApollo();
+import apolloClient from '../lib/apollo';
 
 const SEARCH_TYPES = {
   INITIAL: 'INITIAL',	
@@ -305,4 +302,4 @@ export const allFlights = gql`
   }
 `;
 
-export default withData(withApollo(App));
+export default App;

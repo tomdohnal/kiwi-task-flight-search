@@ -4,8 +4,9 @@ import { Form, Button, Label, Dropdown } from 'semantic-ui-react';
 import { formatDate, parseDate } from 'react-day-picker/moment';
 import DayPickerInput from 'react-day-picker/DayPickerInput';
 import gql from 'graphql-tag';
-import { withApollo } from 'react-apollo';
+
 import { parseKiwiDateToStandardDate, parseToKiwiDate, pushToUrl } from '../lib/helpers';
+import apolloClient from '../lib/apollo';
 
 const removeDuplicateLocations = (allLocationOptions) => (
   allLocationOptions.reduce((locations, currentLocation) => {
@@ -37,7 +38,7 @@ class SearchForm extends Component {
   async getLocationOptions(input) {
     // we don't want to throw an error when the graphql doesn't find a match
     try {
-      const result = await this.props.client.query({
+      const result = await apolloClient.query({
         query: allLocations,
         variables: { search: input },
       });
@@ -287,4 +288,4 @@ export const allLocations = gql`
   }
 `;
 
-export default withApollo(SearchForm);
+export default SearchForm;
