@@ -1,10 +1,14 @@
 import FlightListItem from './FlightListItem';
+import FlightSearchError from './FlightSearchError';
 
 const FlightList = ({ flights }) => (
   <div className="mt-4">
-    {flights.map((flight, index) => (
-      <FlightListItem flight={flight} key={index} />
-    ))}
+    {!!flights.length ?
+    	flights.map((flight, index) => (
+	      <FlightListItem flight={flight} key={index} />
+	    )) :
+    	<FlightSearchError>No results have been found</FlightSearchError>
+    }
   </div>
 );
 

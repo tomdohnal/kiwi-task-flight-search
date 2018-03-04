@@ -1,10 +1,8 @@
 import { Message } from 'semantic-ui-react';
 
-const FlightSearchError = () => (
+const FlightSearchError = ({ children }) => (
   <Message negative>
-    <Message.Header>
-      There has been an error while searching for flights. Please try again!
-    </Message.Header>
+    <Message.Header>{children}</Message.Header>
   </Message>
 );
 

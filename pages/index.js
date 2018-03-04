@@ -245,7 +245,9 @@ class App extends Component {
         />
         {loading && <Loader active inline="centered" size="massive" style={{ marginTop: '6rem'}} />}
         {!loading && flights  && <FlightList flights={flights} />}
-        {searchFailed && <FlightSearchError />}
+        {searchFailed && (
+					<FlightSearchError>There has been an error while searching for flights. Please try again!</FlightSearchError>
+        )}
         {pageInfo && (pageInfo.hasPreviousPage || pageInfo.hasNextPage) && (
           <Pagination
             pageInfo={pageInfo}
