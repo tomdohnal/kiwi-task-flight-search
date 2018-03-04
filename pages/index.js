@@ -127,6 +127,7 @@ class App extends Component {
   	const searchPageIndex = searchType === SEARCH_TYPES.INITIAL ? 1 : this.state.currentPageIndex + 1;
 
 		this.setState(({ pages, currentPageIndex }) => ({ 
+      currentPageIndex: searchType === SEARCH_TYPES.INITIAL ? 1 : currentPageIndex,
 			searchFailed: false, 
 			pages: searchType === SEARCH_TYPES.INITIAL ? 
 				[{ loading: true }] : [...pages, { loading: true }],
