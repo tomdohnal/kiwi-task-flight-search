@@ -1,5 +1,6 @@
 import React, { Component } from 'react';
-import { Container } from 'semantic-ui-react';
+import { Container, Loader } from 'semantic-ui-react';
+import ApolloClient from 'apollo-boost';
 
 import SearchForm from './SearchForm';
 import Header from './Header';
@@ -8,6 +9,7 @@ import FlightSearchError from './FlightSearchError';
 import Pagination from './Pagination';
 import { withApollo } from 'react-apollo';
 import gql from 'graphql-tag';
+import { pushToUrl } from '../lib/helpers';
 
 class App extends Component {
   state = {
@@ -30,19 +32,10 @@ class App extends Component {
         "text": "Paris"
       }
     ],
-    to: [
-      {
-        "key": "london_gb",
-        "value": "London",
-        "text": "London"
-      },
-      {
-        "key": "london_gb",
-        "value": "London",
-        "text": "London"
-      }
-    ],
-    date: '2018-02-28',
+    to: this.props.query.to ? this.props.query.to.split(',').map(location => ({
+      key: location, value: location, text: location,
+    })) : [],
+    date: '2018-03-28',
   };
 
   SEARCH_TYPES = {
@@ -106,21 +99,12 @@ class App extends Component {
 
     const { startCursor, endCursor } = pages[currentPageIndex - 1].info;
 
-    const commonVariabless = {
+    const commonVariables = {
         search: {
           from: from.map(location => ({location: location.value})),
           to: to.map(location => ({location: location.value})),
           date: { exact: date },
         },
-    };
-
-    const commonVariables =  { search: {
-      from: [{ location: 'London' }],
-          to: [{ location: 'Paris' }],
-          date: {
-          exact: '2018-02-28',
-        },
-      },
     };
 
     switch (searchType) {
@@ -174,7 +158,6 @@ class App extends Component {
 
       return {
         pages: updatedPages,
-        currentPageIndex: prevState.currentPageIndex + 1,
       }
     });
   };
@@ -182,12 +165,15 @@ class App extends Component {
   goToNextPage = async () => {
     const { pages, currentPageIndex } = this.state;
 
-    // if the next page is not already loaded
+    // if the next page is not already loaded, load next flights
     if (!pages[currentPageIndex] || !pages[currentPageIndex].flights.length) {
       await this.searchNextFlights();
-    } else {
-      this.setState({ currentPageIndex: currentPageIndex + 1 });
     }
+
+    const newCurrentPageIndexObject = { currentPageIndex: currentPageIndex + 1 };
+
+    pushToUrl(newCurrentPageIndexObject);
+    this.setState(newCurrentPageIndexObject);
   };
 
   searchPreviousFlights = async () => {
@@ -240,6 +226,7 @@ class App extends Component {
   };
 
   render() {
+    console.log();
     const { pages, currentPageIndex, searchFailed, loadingResults, from, to, date } = this.state;
 
     const { flights } = pages[currentPageIndex - 1];
@@ -257,7 +244,7 @@ class App extends Component {
           selectedDate={date}
           onSelectedDateChange={this.setDate}
         />
-        {loadingResults && <div>Loading...</div>}
+        {loadingResults && <Loader active inline="centered" size="massive" style={{ marginTop: '6rem'}} />}
         {flights && !loadingResults && <FlightList flights={flights} />}
         {searchFailed && <FlightSearchError />}
         {(pageInfo.hasPreviousPage || pageInfo.hasNextPage) && !loadingResults && (

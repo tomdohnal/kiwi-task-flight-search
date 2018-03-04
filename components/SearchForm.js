@@ -5,17 +5,17 @@ import { formatDate, parseDate } from 'react-day-picker/moment';
 import DayPickerInput from 'react-day-picker/DayPickerInput';
 import gql from 'graphql-tag';
 import { withApollo } from 'react-apollo';
-import { parseKiwiDateToStandardDate, parseToKiwiDate } from '../lib/dates';
+import { parseKiwiDateToStandardDate, parseToKiwiDate, pushToUrl } from '../lib/helpers';
 
-const removeDuplicateLocations = (allLocationOptions) => {
-  return allLocationOptions.reduce((locations, currentLocation) => {
+const removeDuplicateLocations = (allLocationOptions) => (
+  allLocationOptions.reduce((locations, currentLocation) => {
     if (!locations.map(location => location.value).includes(currentLocation.value)) {
       return [ ...locations, currentLocation ];
     }
 
     return locations;
-  }, []);
-};
+  }, [])
+);
 
 class SearchForm extends Component {
   defaultNoResultsMessage = 'Start typing...';
@@ -23,15 +23,14 @@ class SearchForm extends Component {
   state = {
     locations: [],
     fromSearchQuery: '',
-    fromOptions: removeDuplicateLocations(this.props.fromSelectedOptions),
+    fromOptions: removeDuplicateLocations(this.props.fromSelectedOptions) || [],
     fromError: '',
     fromNoResultsMessage: this.defaultNoResultsMessage,
     toSearchQuery: '',
-    toOptions: removeDuplicateLocations(this.props.toSelectedOptions),
+    toOptions: removeDuplicateLocations(this.props.toSelectedOptions) || [],
     toError: '',
     toNoResultsMessage: this.defaultNoResultsMessage,
     dateError: '',
-    loadingResults: false,
   };
 
 
@@ -74,7 +73,7 @@ class SearchForm extends Component {
     }
   }, 200);
 
-  onFromDropdownChange = (e) => {
+  onFromDropdownSearchChange = (e) => {
     const fromInput = e.target.value;
 
     if (this.state.fromError) {
@@ -86,18 +85,16 @@ class SearchForm extends Component {
     this.showFromOptions(fromInput);
   };
 
-  onFromDropdownSelect = (event, { value }) => {
-    const oldSelectedOptions = this.props.fromSelectedOptions;
-    const allFromOptions = this.state.fromOptions;
+  onFromDropdownChange = (event, { value }) => {
     const newSelectedOptions = value;
 
-    const newlySelectedOption = allFromOptions.find(option => (
-      newSelectedOptions.includes(option.value) && !oldSelectedOptions.map(option => option.value).includes(option.value)
-    ));
-
+    this.props.onSelectedFromOptionsChange(newSelectedOptions.map(option => ({
+      value: option,
+      key: option,
+      text: option,
+    })));
+    
     this.setState({ fromSearchQuery: '' });
-
-    this.props.onSelectedFromOptionsChange([ ...oldSelectedOptions, newlySelectedOption ]);
   };
 
   onFromDropdownBlur = () => {
@@ -123,7 +120,7 @@ class SearchForm extends Component {
     }
   }, 200);
 
-  onToDropdownChange = (e) => {
+  onToDropdownSearchChange = (e) => {
     const toInput = e.target.value;
 
     if (this.state.toError) {
@@ -135,18 +132,16 @@ class SearchForm extends Component {
     this.showToOptions(toInput);
   };
 
-  onToDropdownSelect = (event, { value }) => {
-    const oldSelectedOptions = this.props.toSelectedOptions;
-    const allToOptions = this.state.toOptions;
+  onToDropdownChange = (event, { value }) => {
     const newSelectedOptions = value;
 
-    const newlySelectedOption = allToOptions.find(option => (
-      newSelectedOptions.includes(option.value) && !oldSelectedOptions.map(option => option.value).includes(option.value)
-    ));
+    this.props.onSelectedToOptionsChange(newSelectedOptions.map(option => ({
+      text: option,
+      key: option,
+      value: option,
+    })));
 
     this.setState({ toSearchQuery: '' });
-
-    this.props.onSelectedToOptionsChange([ ...oldSelectedOptions, newlySelectedOption ]);
   };
 
   onToDropdownBlur = () => {
@@ -192,12 +187,14 @@ class SearchForm extends Component {
       this.setState({ dateError: 'Enter when you want to fly' });
     }
 
-    if (true || isFormValid) {
-      this.setState({ loadingResults: true });
+    if (isFormValid) {
+      pushToUrl({
+        from: fromSelectedOptions.map(option => option.value),
+        to: toSelectedOptions.map(option => option.value),
+        date: selectedDate,
+      });
 
       await this.props.searchFlights();
-
-      this.setState({ loadingResults: false });
     }
   };
 
@@ -205,8 +202,7 @@ class SearchForm extends Component {
     const {
       fromSearchQuery, fromOptions, fromError, fromNoResultsMessage,
       toSearchQuery, toOptions, toError, toNoResultsMessage,
-      dateError,
-      loadingResults,
+      dateError
     } = this.state;
 
     const { fromSelectedOptions, toSelectedOptions, selectedDate } = this.props;
@@ -217,8 +213,8 @@ class SearchForm extends Component {
           <label>From:</label>
           <Dropdown
             placeholder="Where you wanna fly from?"
-            onSearchChange={this.onFromDropdownChange}
-            onChange={this.onFromDropdownSelect}
+            onSearchChange={this.onFromDropdownSearchChange}
+            onChange={this.onFromDropdownChange}
             searchQuery={fromSearchQuery}
             options={fromOptions || []}
             onBlur={this.onFromDropdownBlur}
@@ -228,7 +224,7 @@ class SearchForm extends Component {
             selection
             deburr
             noResultsMessage={fromNoResultsMessage}
-            value={removeDuplicateLocations(fromSelectedOptions).map(option => option.text)}
+            value={Array.isArray(fromSelectedOptions) && removeDuplicateLocations(fromSelectedOptions).map(option => option.text)}
             icon={false}
           />
           {fromError && <Label basic color='red' pointing>{fromError}</Label>}
@@ -237,8 +233,8 @@ class SearchForm extends Component {
           <label>To:</label>
           <Dropdown
             placeholder="Where you wanna fly?"
-            onSearchChange={this.onToDropdownChange}
-            onChange={this.onToDropdownSelect}
+            onSearchChange={this.onToDropdownSearchChange}
+            onChange={this.onToDropdownChange}
             searchQuery={toSearchQuery}
             options={toOptions || []}
             onBlur={this.onToDropdownBlur}
@@ -260,7 +256,7 @@ class SearchForm extends Component {
             placeholder="When you wanna fly?"
             formatDate={formatDate}
             parseDate={parseDate}
-            value={parseKiwiDateToStandardDate(selectedDate)}
+            value={selectedDate && parseKiwiDateToStandardDate(selectedDate)}
             // inline styling is not supported, so we have to pass the classnames and use tailwindcss
             classNames={{
               container: 'DayPickerInput w-full',
@@ -271,13 +267,7 @@ class SearchForm extends Component {
           {dateError && <Label basic color='red' pointing>{dateError}</Label>}
         </Form.Field>
         <div style={{ textAlign: 'center' }}>
-          <Button
-            onClick={this.onSearchButtonClick}
-            loading={loadingResults}
-            size="massive"
-          >
-            Search
-          </Button>
+          <Button onClick={this.onSearchButtonClick} size="massive">Search</Button>
         </div>
       </Form>
     );
