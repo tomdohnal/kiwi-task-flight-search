@@ -5,7 +5,7 @@ import { formatDate, parseDate } from 'react-day-picker/moment';
 import DayPickerInput from 'react-day-picker/DayPickerInput';
 import gql from 'graphql-tag';
 
-import { parseKiwiDateToStandardDate, parseToKiwiDate, pushToUrl } from '../lib/helpers';
+import { parseKiwiDateToStandardDate, parseToKiwiDate, isKiwiDateInPast, pushToUrl } from '../lib/helpers';
 import apolloClient from '../lib/apollo';
 
 const removeDuplicateLocations = (allLocationOptions) => (
@@ -186,6 +186,9 @@ class SearchForm extends Component {
     if (!selectedDate) {
       isFormValid = false;
       this.setState({ dateError: 'Enter when you want to fly' });
+    } else if (isKiwiDateInPast(selectedDate)){
+      isFormValid = false;
+      this.setState({ dateError: 'Your selected date is in the past' });
     }
 
     if (isFormValid) {
