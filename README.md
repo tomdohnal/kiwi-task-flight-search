@@ -1,51 +1,14 @@
-[![Deploy to now](https://deploy.now.sh/static/button.svg)](https://deploy.now.sh/?repo=https://github.com/zeit/next.js/tree/master/examples/with-apollo)
-# Apollo Example
+# Kiwi.com Modern JS weekend entry task: Flight Search Tool
 
-## Demo
+## How to run the app?
 
-https://next-with-apollo.now.sh
+To clone the repositary, run `git clone https://github.com/tomdohnal/kiwi-task-flight-search.git` or `git clone git@github.com:tomdohnal/kiwi-task-flight-search.git`
 
-## How to use
+To run the app, run `yarn next`
 
-### Using `create-next-app`
-
-Download [`create-next-app`](https://github.com/segmentio/create-next-app) to bootstrap the example:
-
-```
-npm i -g create-next-app
-create-next-app --example with-apollo with-apollo-app
-```
-
-### Download manually
-
-Download the example [or clone the repo](https://github.com/zeit/next.js):
-
-```bash
-curl https://codeload.github.com/zeit/next.js/tar.gz/canary | tar -xz --strip=2 next.js-canary/examples/with-apollo
-cd with-apollo
-```
-
-Install it and run:
-
-```bash
-npm install
-npm run dev
-```
-
-Deploy it to the cloud with [now](https://zeit.co/now) ([download](https://zeit.co/download)):
-
-```bash
-now
-```
-
-## The idea behind the example
-
-[Apollo](http://dev.apollodata.com) is a GraphQL client that allows you to easily query the exact data you need from a GraphQL server. In addition to fetching and mutating data, Apollo analyzes your queries and their results to construct a client-side cache of your data, which is kept up to date as further queries and mutations are run, fetching more results from the server.
-
-In this simple example, we integrate Apollo seamlessly with Next by wrapping our *pages* inside a [higher-order component (HOC)](https://facebook.github.io/react/docs/higher-order-components.html). Using the HOC pattern we're able to pass down a central store of query result data created by Apollo into our React component hierarchy defined inside each page of our Next application.
-
-On initial page load, while on the server and inside `getInitialProps`, we invoke the Apollo method,  [`getDataFromTree`](http://dev.apollodata.com/react/server-side-rendering.html#getDataFromTree). This method returns a promise; at the point in which the promise resolves, our Apollo Client store is completely initialized.
-
-This example relies on [graph.cool](https://www.graph.cool) for its GraphQL backend.
-
-*Note: Apollo uses Redux internally; if you're interested in integrating the client with your existing Redux store check out the [`with-apollo-and-redux`](https://github.com/zeit/next.js/tree/master/examples/with-apollo-and-redux) example.*
+## Features
+* fetching results from a GraphQL endpoint (with the help of [Apollo](https://github.com/apollographql))
+* "From" and "To" destinations suggestions
+* pagination
+* form input is pushed to the url so that when the page refreshes, it serverrenders the search results right away (with the help of [next.js](https://github.com/zeit/next.js/))
+* prefetching next page when paginating
